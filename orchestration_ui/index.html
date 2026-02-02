@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Booster Web Pilot</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-orbit"></div>
+    <div class="bg-grid"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">
+          <img src="assets/img_logo_white.png" alt="Booster" />
+        </div>
+        <div class="tag">Pilot Console</div>
+      </div>
+      <div class="status">
+        <div class="chip" id="status-connection">Disconnected</div>
+        <div class="chip" id="status-mode">Mode: --</div>
+        <div class="chip" id="status-battery">Battery: --</div>
+      </div>
+      <div class="connect">
+        <input id="api-host" type="text" placeholder="http://robot-ip:8000" />
+        <button id="btn-connect" class="btn btn-primary">Connect</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel console">
+        <div class="console-header">
+          <div class="console-title">Robot Control</div>
+          <div class="console-actions">
+            <input id="stream-url" type="text" placeholder="Stream URL" />
+            <button id="btn-set-stream" class="btn btn-ghost">Load</button>
+            <button id="btn-stop" class="btn btn-danger">Emergency Stop</button>
+          </div>
+        </div>
+
+        <div class="robot-stage">
+        <div class="robot-status-bar" id="robot_status_bar">
+          <div class="status-left">
+            <button class="status-icon-btn" id="btn-back" type="button">
+              <img src="assets/ic_arrow_left_white_24.svg" alt="Back" />
+            </button>
+            <div class="status-divider"></div>
+            <div class="status-pill">Booster Pilot</div>
+            <div class="status-pill" id="status-connection-inline">Disconnected</div>
+            <div class="status-pill agent-pill">
+              <img src="assets/ic_agent_logo.png" alt="Agent" />
+              <span id="agent-name">Idle</span>
+              <img src="assets/ic_right_arrow.png" alt="Open" />
+            </div>
+          </div>
+          <div class="status-right">
+            <div class="status-pill">
+              <img src="assets/ic_status_bar_robot.png" alt="Robot" />
+              <span id="status-robot-inline">Normal</span>
+              <img src="assets/ic_status_bar_triangle.svg" alt="More" />
+            </div>
+            <div class="status-pill">
+              <img src="assets/ic_wifi.svg" alt="WiFi" />
+              <span id="status-wifi-inline">--</span>
+            </div>
+            <div class="status-pill">
+              <img src="assets/ic_teaching.png" alt="Teaching" />
+              <span>Teaching</span>
+            </div>
+            <div class="status-pill warning-pill">
+              <img src="assets/ic_warning.svg" alt="Warning" />
+              <span>Firmware Warning</span>
+            </div>
+          </div>
+        </div>
+
+          <div class="video-frame stage-video">
+            <img id="stream-feed" alt="Robot feed" />
+            <div class="video-overlay">
+              <div class="overlay-title">Robot Cam</div>
+              <div class="overlay-sub">No stream loaded</div>
+            </div>
+
+            <div class="stage-left">
+              <div class="head-card">
+                <div class="card-title">Head</div>
+                <div class="head-pad" id="robot_head_rotate_btn">
+                  <button class="pad-btn" data-head="up">UP</button>
+                  <button class="pad-btn" data-head="left">LT</button>
+                  <button class="pad-btn" data-head="center">CTR</button>
+                  <button class="pad-btn" data-head="right">RT</button>
+                  <button class="pad-btn" data-head="down">DN</button>
+                  <button class="pad-btn" data-head="left-up">UL</button>
+                  <button class="pad-btn" data-head="right-up">UR</button>
+                  <button class="pad-btn" data-head="left-down">LL</button>
+                  <button class="pad-btn" data-head="right-down">LR</button>
+                </div>
+                <div class="readout" id="head-readout">pitch 0 / yaw 0</div>
+              </div>
+
+              <div class="joystick-card" id="robot_move_stick_controller">
+                <div class="card-title">Move</div>
+                <div class="joystick" data-stick="move">
+                  <div class="joystick-base"></div>
+                  <div class="joystick-handle"></div>
+                </div>
+                <div class="readout" id="move-readout">vx 0.00 / vy 0.00</div>
+              </div>
+            </div>
+
+            <div class="stage-right">
+              <div class="joystick-card" id="robot_rotate_stick_controller">
+                <div class="card-title">Rotate</div>
+                <div class="joystick" data-stick="rotate">
+                  <div class="joystick-base"></div>
+                  <div class="joystick-handle"></div>
+                </div>
+                <div class="readout" id="rotate-readout">vyaw 0.00</div>
+              </div>
+
+              <div class="mode-bar stage-mode">
+                <button class="btn btn-outline" data-mode="0">Damping</button>
+                <button class="btn btn-outline" data-mode="1">Prepare</button>
+                <button class="btn btn-outline" data-mode="2">Walking</button>
+                <button class="btn btn-outline" data-mode="3">Custom</button>
+              </div>
+            </div>
+
+            <div class="stage-center">
+              <div class="agent-card">
+                <div class="agent-header">
+                  <div class="card-title">AI Response Agent</div>
+                  <button id="btn-agent-toggle" class="btn btn-primary">Activate</button>
+                </div>
+                <div class="agent-grid">
+                  <div class="field">
+                    <label>System Prompt</label>
+                    <textarea id="system-prompt" rows="2" placeholder="Set persona and constraints"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Welcome Message</label>
+                    <textarea id="welcome-message" rows="2" placeholder="Welcome message"></textarea>
+                  </div>
+                  <div class="field">
+                    <label>Voice Input</label>
+                    <div class="speak-row">
+                      <input id="voice-text" type="text" placeholder="Tap mic and speak" />
+                      <button id="btn-voice" class="btn btn-primary">Mic</button>
+                    </div>
+                    <div id="voice-status" class="voice-status">Idle</div>
+                  </div>
+                  <div class="field">
+                    <label>Speak Text</label>
+                    <div class="speak-row">
+                      <input id="speak-text" type="text" placeholder="Type text to speak" />
+                      <button id="btn-speak" class="btn btn-outline">Speak</button>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label>Gesture Trigger</label>
+                    <div class="toggle-row">
+                      <button id="btn-gesture-enable" class="btn btn-outline">Enable on Speech</button>
+                      <button id="btn-gesture-disable" class="btn btn-outline">Disable</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-strip">
+          <div class="action-strip-title">
+            <div class="card-title">Quick Actions</div>
+            <button id="btn-gesture" class="btn btn-primary">Trigger k1_gesture_001</button>
+          </div>
+          <div class="action-scroll">
+            <button class="action-btn" data-action="wave">
+              <img src="assets/ic_action_wavehand.png" alt="" />
+              <span>Wave</span>
+            </button>
+            <button class="action-btn" data-action="shake">
+              <img src="assets/ic_action_shakehand.png" alt="" />
+              <span>Handshake</span>
+            </button>
+            <button class="action-btn" data-action="pushup">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Push Up</span>
+            </button>
+            <button class="action-btn" data-action="liedown">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Lie Down</span>
+            </button>
+            <button class="action-btn" data-action="getup">
+              <img src="assets/ic_action_standup.png" alt="" />
+              <span>Get Up</span>
+            </button>
+            <button class="action-btn" data-action="dance-newyear">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>New Year</span>
+            </button>
+            <button class="action-btn" data-action="dance-nezha">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Nezha</span>
+            </button>
+            <button class="action-btn" data-action="dance-towards">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Towards Future</span>
+            </button>
+            <button class="action-btn" data-action="gesture-dabbing">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Dabbing</span>
+            </button>
+            <button class="action-btn" data-action="gesture-ultraman">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Ultraman</span>
+            </button>
+            <button class="action-btn" data-action="gesture-respect">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Respect</span>
+            </button>
+            <button class="action-btn" data-action="gesture-cheer">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Cheer</span>
+            </button>
+            <button class="action-btn" data-action="gesture-luckycat">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Lucky Cat</span>
+            </button>
+            <button class="action-btn" data-action="dance-stop">
+              <img src="assets/ic_action_default.png" alt="" />
+              <span>Stop Dance</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div>Booster Robotics - Web Pilot</div>
+      <div class="hint">Keep the robot in a safe stance before enabling actions.</div>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

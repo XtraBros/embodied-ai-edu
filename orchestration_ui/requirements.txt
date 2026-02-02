@@ -1,0 +1,2 @@
+# No pip packages required for web_ui.
+# ROS2 runtime provides rclpy and booster_interface.

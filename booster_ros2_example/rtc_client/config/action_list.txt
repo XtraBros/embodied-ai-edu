@@ -1,0 +1,36 @@
+WaveHand: wave hand gesture. Use when offering greetings like hello or goodbye.
+ShakeHand: handshake gesture.
+MoveHeadUp: tilt head up.
+MoveHeadRight: turn head right.
+MoveHeadDown: tilt head down.
+MoveHeadLeft: turn head left.
+MoveHeadRightUp: head up‑right diagonal.
+MoveHeadRightDown: head down‑right diagonal.
+MoveHeadLeftUp: head up‑left diagonal.
+MoveHeadLeftDown: head down‑left diagonal.
+FallDownRecovery: recovery/get‑up sequence after a fall.
+PushUp: push‑up routine.
+OpenHand: open gripper/hand.
+CloseHand: close gripper/hand.
+Hug: hug gesture.
+NewYearDance: preset dance sequence.
+Boxing: boxing routine.
+DanceRockAndRoll: rock‑and‑roll dance routine.
+DanceTowardsFuture: preset dance routine.
+GestureManekiNeko: “beckoning cat” gesture.
+GesturePogba: named gesture routine.
+GestureUltraman: Ultraman‑style pose/gesture.
+GestureChineseGreet: Chinese greeting gesture.
+GestureCheer: cheering gesture.
+LieDown: lie down pose.
+Dance: generic dance routine.
+FancyKick: kick routine.
+RMAGoalieCrouch: goalie crouch pose.
+RMAGoalieGetup: goalie get‑up routine.
+StandKickBall: stand and kick routine.
+RobotDance:  perform a Robot Dance
+ChickenDance: perform a Chicken dance
+WalkForward: walk forward briefly.
+WalkBackward: walk backward briefly.
+WalkLeft: walk left briefly.
+WalkRight: walk right briefly.
