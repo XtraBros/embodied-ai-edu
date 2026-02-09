@@ -7,6 +7,7 @@ import time
 import wave
 import urllib.error
 import urllib.request
+from collections import deque
 
 
 def _log(node, level, message):
@@ -112,6 +113,168 @@ def _extract_after_trigger(text, trigger_phrase):
         return ""
     after = text[idx + len(trigger) :].strip(" ,.!?\t\r\n")
     return after
+
+
+def _load_vosk_recognizer(model_path, sample_rate, node=None):
+    try:
+        from vosk import Model, KaldiRecognizer
+    except ImportError:
+        _log(node, "error", "Vosk is not installed. Install 'vosk' to use realtime ASR.")
+        return None
+    if not model_path:
+        _log(node, "error", "Vosk model path not configured (asr_model_path).")
+        return None
+    model_path = os.path.expanduser(model_path)
+    try:
+        model = Model(model_path)
+    except Exception as exc:
+        _log(node, "error", f"Failed to load Vosk model: {exc}")
+        return None
+    recognizer = KaldiRecognizer(model, sample_rate)
+    return recognizer
+
+
+def _iter_audio_frames(sample_rate, frame_length, device_index, node=None):
+    command = [
+        "arecord",
+        "-q",
+        "-f",
+        "S16_LE",
+        "-r",
+        str(sample_rate),
+        "-c",
+        "1",
+        "-t",
+        "raw",
+    ]
+    try:
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE)
+    except FileNotFoundError:
+        _log(node, "error", "STT: 'arecord' not found. Install ALSA utilities.")
+        return
+    chunk_size = int(frame_length * 2)
+    try:
+        while True:
+            data = proc.stdout.read(chunk_size)
+            if not data:
+                break
+            yield data
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def run_stt_openai_realtime(config, node=None):
+    sample_rate = int(config.get("stt_sample_rate", 16000))
+    max_sec = float(config.get("stt_max_sec", 10.0))
+    silence_ms = float(config.get("stt_silence_ms", 500))
+    rms_threshold = int(config.get("stt_rms_threshold", 500))
+    min_speech_ms = float(config.get("stt_min_speech_ms", 200))
+    log_rms = bool(config.get("stt_log_rms", False))
+    trigger_phrase = (config.get("stt_trigger_phrase") or "Hey Robo").strip()
+    trigger_required = bool(config.get("stt_trigger_required", True))
+
+    recognizer = _load_vosk_recognizer(
+        (config.get("asr_model_path") or "").strip(), sample_rate, node=node
+    )
+    if recognizer is None:
+        return ""
+
+    frame_length = 512
+
+    silence_chunks = max(1, int(silence_ms / 20))
+    speech_chunks = 0
+    silence_count = 0
+    started = False
+    triggered = False
+    last_partial = ""
+    pre_roll = deque(maxlen=10)
+    captured = []
+    start_time = time.time()
+    post_trigger_start = None
+    last_log = start_time
+
+    _log(node, "info", "ASR: realtime listening...")
+    print("ASR: realtime listening...")
+    for pcm_bytes in _iter_audio_frames(
+        sample_rate,
+        frame_length,
+        config.get("stt_wakeword_device_index"),
+        node=node,
+    ):
+            if triggered and post_trigger_start and (time.time() - post_trigger_start) > max_sec:
+                break
+            pre_roll.append(pcm_bytes)
+
+            if recognizer.AcceptWaveform(pcm_bytes):
+                result = json.loads(recognizer.Result() or "{}").get("text", "")
+                if result and result != last_partial:
+                    print(f"\rASR: {result}   ", end="", flush=True)
+                    last_partial = result
+            partial = json.loads(recognizer.PartialResult() or "{}").get("partial", "")
+            if partial and partial != last_partial:
+                print(f"\rASR: {partial}   ", end="", flush=True)
+                last_partial = partial
+
+            if not triggered and trigger_required:
+                lowered = last_partial.lower()
+                if trigger_phrase.lower() in lowered:
+                    triggered = True
+                    captured = list(pre_roll)
+                    silence_count = 0
+                    speech_chunks = 0
+                    started = False
+                    post_trigger_start = time.time()
+                    print("\nWakeword: detected (from transcript).")
+
+            if triggered:
+                captured.append(pcm_bytes)
+                rms = audioop.rms(pcm_bytes, 2)
+                if log_rms and (time.time() - last_log) >= 0.5:
+                    _log(node, "info", f"STT RMS: {rms}")
+                    last_log = time.time()
+                if rms >= rms_threshold:
+                    started = True
+                    silence_count = 0
+                    speech_chunks += 1
+                elif started:
+                    silence_count += 1
+                    if silence_count >= silence_chunks:
+                        break
+
+    print()
+    if not captured:
+        return ""
+    speech_ms = speech_chunks * 20
+    if speech_ms < min_speech_ms:
+        return ""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as handle:
+        output_path = handle.name
+    try:
+        with wave.open(output_path, "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            wav.writeframes(b"".join(captured))
+        text, err = request_openai_stt(output_path, config, node=node)
+    finally:
+        try:
+            os.remove(output_path)
+        except OSError:
+            pass
+
+    if err:
+        _log(node, "error", f"OpenAI STT error: {err}")
+        return ""
+    if text:
+        _log(node, "info", f"STT (final): {text}")
+    else:
+        _log(node, "info", "STT: no speech detected.")
+    return text
 
 
 def request_openai_stt(audio_path, config, node=None):
@@ -231,6 +394,8 @@ def _record_with_silence(
 
 
 def run_stt_openai(config, node=None):
+    if bool(config.get("stt_realtime_enabled", False)):
+        return run_stt_openai_realtime(config, node=node)
     sample_rate = int(config.get("stt_sample_rate", 16000))
     max_sec = float(config.get("stt_max_sec", 10.0))
     silence_ms = float(config.get("stt_silence_ms", 500))
@@ -240,9 +405,13 @@ def run_stt_openai(config, node=None):
     trigger_phrase = (config.get("stt_trigger_phrase") or "").strip()
     trigger_required = bool(config.get("stt_trigger_required", False))
     trigger_timeout = float(config.get("stt_trigger_timeout_sec", 30.0))
+    wakeword_enabled = bool(config.get("stt_wakeword_enabled", False))
     start_wait = time.time()
 
     while True:
+        if wakeword_enabled:
+            if not _detect_wakeword_porcupine(config, node=node):
+                return ""
         _log(node, "info", "STT: listening for speech...")
         print("STT: listening for speech...")
         output_path, status = _record_with_silence(
