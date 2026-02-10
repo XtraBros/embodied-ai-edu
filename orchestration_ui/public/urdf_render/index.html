@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RobotModel</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      transform: translateX(-18%);
+      transform-origin: center center;
+    }
+
+    .controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(200, 200, 200, 1);
+      padding: 10px;
+      border-radius: 5px;
+      visibility: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    #sliderGroups > div {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #sliderGroups label {
+      min-width: 160px;
+    }
+
+    #sliderGroups input[type="range"] {
+      flex: 1;
+    }
+
+    #sliderGroups span {
+      min-width: 56px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      display: inline-block;
+    }
+  </style>
+  <script type="module" crossorigin src="./assets/index-CHw-QaMB.js"></script>
+</head>
+
+<body>
+  <div id="app"></div>
+  <div class="controls" id="controlPanel">
+    <div id="sliderGroups" style="display: flex; flex-direction: column; gap: 12px;">
+      <div id="sliderGroup0" style="display: flex; justify-content: space-between;">
+        <label for="headSlider">头部旋转: </label>
+        <input type="range" min="-90" max="90" value="0">
+        <span>0°</span>
+      </div>
+    </div>
+    <input type="checkbox" id="toggleSwitch" style="display: none;" />
+    <img id="exportButton" width="100px" height="100px" style="object-fit: cover; display: none;">
+  </div>
+
+  <script>
+    (function () {
+      let attempts = 0;
+      const sliderMap = {};
+      const desiredOrder = [
+        'HEAD_ROLL',
+        'HEAD_PITCH',
+        'LEFT_SHOULDER_PITCH',
+        'LEFT_SHOULDER_ROLL',
+        'LEFT_ELBOW_PITCH',
+        'LEFT_ELBOW_YAW',
+        'RIGHT_SHOULDER_PITCH',
+        'RIGHT_SHOULDER_ROLL',
+        'RIGHT_ELBOW_PITCH',
+        'RIGHT_ELBOW_YAW'
+      ];
+      const jointLimits = {
+        HEAD_ROLL: { min: -56, max: 56 },
+        HEAD_PITCH: { min: -16, max: 45 },
+        LEFT_SHOULDER_PITCH: { min: -186, max: 66 },
+        LEFT_SHOULDER_ROLL: { min: -92, max: 86 },
+        LEFT_ELBOW_PITCH: { min: -126, max: 126 },
+        LEFT_ELBOW_YAW: { min: -118, max: 0 },
+        RIGHT_SHOULDER_PITCH: { min: -186, max: 66 },
+        RIGHT_SHOULDER_ROLL: { min: -86, max: 92 },
+        RIGHT_ELBOW_PITCH: { min: -126, max: 126 },
+        RIGHT_ELBOW_YAW: { min: 0, max: 118 }
+      };
+
+      function buildSliderMap() {
+        Object.keys(sliderMap).forEach((key) => delete sliderMap[key]);
+        const groups = Array.from(document.querySelectorAll('#sliderGroups > div'));
+        groups.forEach((group, index) => {
+          const label = group.querySelector('label');
+          const input = group.querySelector('input');
+          const span = group.querySelector('span');
+          if (!label || !input || !span) {
+            return;
+          }
+          const name = desiredOrder[index] || (label.textContent || '').trim();
+          if (!name) {
+            return;
+          }
+          label.textContent = name;
+          sliderMap[name] = { input, span };
+          if (jointLimits[name]) {
+            input.min = String(jointLimits[name].min);
+            input.max = String(jointLimits[name].max);
+          }
+          input.oninput = (event) => {
+            const next = parseInt(event.target.value, 10);
+            if (Number.isFinite(next)) {
+              const rad = (next * Math.PI) / 180;
+              if (typeof window.updateJoint === 'function') {
+                window.updateJoint(name, rad, true);
+              }
+            }
+          };
+        });
+      }
+      function reorderSliders() {
+        const container = document.getElementById('sliderGroups');
+        if (!container) {
+          return;
+        }
+        const groups = Array.from(container.children);
+        const map = {};
+        const extras = [];
+        groups.forEach((group) => {
+          const label = group.querySelector('label');
+          const name = (label?.textContent || '').trim();
+          if (name && !map[name]) {
+            map[name] = group;
+          } else if (name && map[name]) {
+            group.remove();
+          } else if (!name) {
+            extras.push(group);
+          }
+        });
+        container.innerHTML = '';
+        desiredOrder.forEach((name) => {
+          if (map[name]) {
+            container.appendChild(map[name]);
+          }
+        });
+        extras.forEach((group) => container.appendChild(group));
+      }
+      function updateSlider(name, rad) {
+        if (!sliderMap[name]) {
+          reorderSliders();
+          buildSliderMap();
+        }
+        const control = sliderMap[name];
+        if (!control) {
+          return;
+        }
+        const limits = jointLimits[name];
+        let deg = Math.round((rad * 180) / Math.PI);
+        if (limits) {
+          deg = Math.min(limits.max, Math.max(limits.min, deg));
+          control.input.min = String(limits.min);
+          control.input.max = String(limits.max);
+        }
+        control.input.value = String(deg);
+        control.span.textContent = `${deg} deg`;
+      }
+      const timer = setInterval(() => {
+        if (typeof window.updateJoint === 'function') {
+          const original = window.updateJoint;
+          window.updateJoint = function (jointName, rad, render) {
+            const result = original(jointName, rad, render);
+            updateSlider(jointName, rad);
+            try {
+              window.parent.postMessage({
+                type: 'urdf_joint_update',
+                joint: jointName,
+                rad: rad
+              }, '*');
+            } catch (err) {
+            }
+            return result;
+          };
+          if (typeof window.updateJoints === 'function') {
+            const originalUpdateJoints = window.updateJoints;
+            window.updateJoints = function (arg) {
+              let payload = arg;
+              if (typeof payload === 'string') {
+                try {
+                  payload = JSON.parse(payload);
+                } catch (err) {
+                  payload = null;
+                }
+              }
+              if (payload && typeof payload === 'object') {
+                Object.entries(payload).forEach(([name, rad]) => {
+                  if (rad !== null && rad !== undefined) {
+                    updateSlider(name, rad);
+                  }
+                });
+              }
+              return originalUpdateJoints(arg);
+            };
+          }
+          reorderSliders();
+          buildSliderMap();
+          clearInterval(timer);
+        } else if (++attempts > 60) {
+          clearInterval(timer);
+        }
+      }, 100);
+    })();
+  </script>
+</body>
+
+</html>

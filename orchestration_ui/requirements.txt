@@ -1,2 +1,2 @@
-# No pip packages required for web_ui.
-# ROS2 runtime provides rclpy and booster_interface.
+flask==3.0.3
+paramiko==3.4.0

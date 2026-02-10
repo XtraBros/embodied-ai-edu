@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Booster Orchestration Editor</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Booster Orchestration</p>
+        <h1>Frame Editor</h1>
+        <p class="subtitle">Build joint poses frame by frame for the upper body and export to JSON.</p>
+      </div>
+      <div class="hero-badge">
+        <span>Offline</span>
+        <strong>Editor</strong>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Export Settings</h2>
+        <p>Set identifiers that will be used in the exported JSON file.</p>
+      </div>
+      <div class="grid">
+        <label>
+          Movement Name
+          <input id="movement-name" placeholder="New movement" />
+        </label>
+        <label>
+          Orchestration ID
+          <input id="orch-id" placeholder="orch id" />
+        </label>
+        <label>
+          Track ID
+          <input id="track-id" placeholder="track_main" />
+        </label>
+        <label>
+          Track Type
+          <input id="track-type" type="number" value="0" />
+        </label>
+        <label>
+          Controller Shortcut
+          <div class="shortcut-select">
+            <select id="shortcut-left">
+              <option value="">None</option>
+              <option value="LT">LT</option>
+              <option value="LB">LB</option>
+              <option value="RT">RT</option>
+              <option value="RB">RB</option>
+            </select>
+            <span>+</span>
+            <select id="shortcut-right">
+              <option value="">None</option>
+              <option value="UP">UP</option>
+              <option value="DOWN">DOWN</option>
+              <option value="LEFT">LEFT</option>
+              <option value="RIGHT">RIGHT</option>
+              <option value="X">X</option>
+              <option value="Y">Y</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+            </select>
+          </div>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Frames</h2>
+        <p>Angles are in degrees to match the preview sliders. Upload converts to tenths of degrees.</p>
+      </div>
+      <div class="btn-group">
+        <button id="btn-add-frame">Add Frame</button>
+        <button id="btn-clear-frames" class="ghost">Clear</button>
+        <button id="btn-import" class="ghost">Import JSON</button>
+        <input id="file-input" type="file" accept="application/json" />
+      </div>
+      <div id="frames" class="frame-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Pose Preview</h2>
+        <p>Preview updates from the selected frame using the original URDF renderer.</p>
+      </div>
+      <div class="preview-shell">
+        <iframe id="robot-preview" title="Robot preview" src="urdf_render/index.html?model=T1&mode=normal"></iframe>
+        <iframe id="robot-thumbnailer" class="thumbnail-renderer" title="Robot thumbnail renderer" src="urdf_render/index.html?model=T1&mode=normal" tabindex="-1" aria-hidden="true"></iframe>
+        <div class="preview-note">Drag to rotate. Preview uses T1 joints and radians.</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>Movement Preview</h2>
+          <p>Frame thumbnails and a video-style preview that interpolates between frames.</p>
+        </div>
+        <div class="btn-group preview-controls">
+          <button id="btn-preview-play" class="ghost">Play</button>
+          <button id="btn-preview-stop" class="ghost" disabled>Stop</button>
+        </div>
+      </div>
+      <div id="movement-preview" class="movement-strip"></div>
+      <div id="movement-scale" class="movement-scale"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Export Orchestration</h2>
+        <p>Download the raw track JSON or push the data straight to the robot.</p>
+      </div>
+      <div class="export-grid">
+        <div class="export-card">
+          <h3>Download</h3>
+          <p>Raw track JSON is the frame array sent to the robot.</p>
+          <div class="btn-group">
+            <button id="btn-export-raw">Download Raw Track JSON</button>
+          </div>
+        </div>
+        <div class="export-card">
+          <h3>Publish to Robot (SSH)</h3>
+          <div class="grid">
+            <label>
+              Robot Address
+              <input id="robot-host" placeholder="user@192.168.0.20" />
+            </label>
+            <label>
+              Password
+              <input id="robot-password" type="password" placeholder="••••••••" />
+            </label>
+          </div>
+          <div class="btn-group">
+            <button id="btn-publish">Publish via SSH</button>
+          </div>
+          <p id="publish-status" class="status muted"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
