@@ -86,24 +86,18 @@ def stop_face_tracking(node, client):
     return call_api(node, client, 2004, "")
 
 
-def speak(node, client, text):
-    body = json.dumps({"msg": text})
-    return call_api(node, client, 2002, body)
-
-
 def speak_with_backend(node, client, text, config):
     if not text:
         return False
     text = sanitize_tts_text(text)
     if not text:
         return False
-    backend = (config.get("tts_backend") or config.get("tts_provider") or "robot").lower()
-    if backend in ("openai", "openai_tts", "openai-tts"):
-        ok = speak_openai_tts(text, config, node=node)
-        if ok:
-            return True
-        node.get_logger().warn("OpenAI TTS failed; falling back to robot TTS.")
-    return speak(node, client, text)
+    tts_start = time.monotonic()
+    ok = speak_openai_tts(text, config, node=node)
+    log_stage_duration(node, "OpenAI TTS", tts_start)
+    if not ok:
+        node.get_logger().warn("OpenAI TTS failed; no fallback available.")
+    return ok
 
 
 def sanitize_tts_text(text):
@@ -119,6 +113,13 @@ def sanitize_tts_text(text):
             out.append(ch)
     cleaned = "".join(out).strip()
     return cleaned
+
+
+def log_stage_duration(node, stage, start_time):
+    if node is None or start_time is None:
+        return
+    duration = time.monotonic() - start_time
+    node.get_logger().info(f"{stage} took {duration:.2f}s")
 
 
 SDL_HAT_CENTERED = 0x00
@@ -908,7 +909,9 @@ def main():
     try:
         while True:
             if args.input_mode == "asr":
+                asr_start = time.monotonic()
                 line = run_asr(config, node)
+                log_stage_duration(node, "ASR capture", asr_start)
                 if not line:
                     continue
             else:
@@ -928,6 +931,7 @@ def main():
                     if stream_response_json
                     else None
                 )
+                llm_stream_start = time.monotonic()
                 try:
                     for delta in request_llm_stream(line, config):
                         raw_text += delta
@@ -947,8 +951,10 @@ def main():
                                 if enable_tts:
                                     speak_with_backend(node, client, chunk, config)
                 except RuntimeError as exc:
+                    log_stage_duration(node, "LLM streaming", llm_stream_start)
                     print(f"LLM error: {exc}")
                     continue
+                log_stage_duration(node, "LLM streaming", llm_stream_start)
 
                 trailing = pending.strip()
                 if trailing and enable_tts:
@@ -967,7 +973,9 @@ def main():
                     handle_action(node, action_cmd, config, joystick_publisher)
                 continue
 
+            llm_request_start = time.monotonic()
             response, err = request_llm(line, config)
+            log_stage_duration(node, "LLM request", llm_request_start)
             if err:
                 print(f"LLM error: {err}")
                 continue
