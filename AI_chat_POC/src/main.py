@@ -217,6 +217,7 @@ ACTION_ALIASES = dict(DEFAULT_ACTION_ALIASES)
 ORCH_SHORTCUTS = dict(DEFAULT_ORCH_SHORTCUTS)
 SONG_LIBRARY = {}
 SONG_LIBRARY_NORMALIZED = {}
+ORCH_SHORTCUT_DURATIONS = {}
 
 MUSIC_STOP_WORDS = {"stop", "stop_song", "stop_music", "stop_playing", "off", "none", "null"}
 
@@ -464,6 +465,7 @@ def load_action_and_song_lists(config_path, config):
         if isinstance(orch, dict):
             ORCH_SHORTCUTS.clear()
             ORCH_SHORTCUTS.update(orch)
+    _load_orch_durations(config_path, config)
 
 
 def _music_player_path(config):
@@ -471,6 +473,73 @@ def _music_player_path(config):
     if script_path:
         return script_path
     return str(Path(__file__).resolve().parent / "music_player.py")
+
+
+def _shortcut_key(buttons=None, hat_key=None):
+    btns = tuple(b.upper() for b in (buttons or []))
+    hat = hat_key.upper() if isinstance(hat_key, str) and hat_key else ""
+    return (btns, hat)
+
+
+def _load_orch_durations(config_path, config):
+    metadata_path = config.get("orch_metadata_path", "").strip()
+    storage_dir = config.get("orch_storage_dir", "").strip()
+    if not metadata_path:
+        return
+    meta_path = Path(metadata_path)
+    if not meta_path.exists():
+        return
+    if not storage_dir:
+        storage_dir = str(meta_path.parent)
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return
+    orch_list = data.get("orch_list")
+    if not isinstance(orch_list, list):
+        return
+    durations_by_shortcut = {}
+    for orch in orch_list:
+        if not isinstance(orch, dict):
+            continue
+        shortcut = orch.get("shortcut") or []
+        if not isinstance(shortcut, list) or not shortcut:
+            continue
+        tracks = orch.get("tracks") or []
+        if not isinstance(tracks, list) or not tracks:
+            continue
+        max_ms = 0
+        for track in tracks:
+            if not isinstance(track, dict):
+                continue
+            track_id = track.get("track_id")
+            if not track_id:
+                continue
+            track_path = (
+                Path(storage_dir)
+                / "orchestrations"
+                / orch.get("id", "")
+                / f"track_{track_id}"
+                / f"{track_id}.json"
+            )
+            try:
+                with open(track_path, "r", encoding="utf-8") as handle:
+                    frames = json.load(handle)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(frames, list) and frames:
+                last = frames[-1]
+                if isinstance(last, dict) and "ts" in last:
+                    try:
+                        max_ms = max(max_ms, int(last.get("ts", 0)))
+                    except (TypeError, ValueError):
+                        continue
+        if max_ms > 0:
+            key = _shortcut_key(shortcut, None)
+            durations_by_shortcut[key] = max_ms / 1000.0
+    ORCH_SHORTCUT_DURATIONS.clear()
+    ORCH_SHORTCUT_DURATIONS.update(durations_by_shortcut)
 
 
 def handle_song(node, song_value, config):
@@ -543,6 +612,12 @@ def handle_action(node, action_cmd, config, joystick_publisher=None):
         return
     if action_cmd in ORCH_SHORTCUTS:
         shortcut = ORCH_SHORTCUTS[action_cmd]
+        delay_sec = float(config.get("orch_duration_fallback_sec", config.get("auto_stop_sec", 5.0)))
+        padding_sec = float(config.get("orch_duration_padding_sec", 1.0))
+        shortcut_key = _shortcut_key(shortcut.get("buttons"), shortcut.get("hat"))
+        if shortcut_key in ORCH_SHORTCUT_DURATIONS:
+            delay_sec = ORCH_SHORTCUT_DURATIONS[shortcut_key]
+        delay_sec = max(delay_sec + padding_sec, 0.0)
         node.get_logger().info(f"Trigger orchestration shortcut: {action_cmd}")
         send_combo(
             node,
@@ -561,7 +636,7 @@ def handle_action(node, action_cmd, config, joystick_publisher=None):
             event_press=config.get("joystick_event_press", 1539),
             event_release=config.get("joystick_event_release", 1540),
             hold_sec=config.get("joystick_hold_sec", 0.2),
-            delay_sec=config.get("auto_stop_sec", 5.0),
+            delay_sec=delay_sec,
         )
         return
     action_key = normalize_action(action_cmd)
@@ -818,7 +893,7 @@ def main():
     )
     parser.add_argument(
         "--config",
-        default=str(Path(__file__).resolve().parent.parent / "config" / "ai_chat_web.json"),
+        default=str(Path(__file__).resolve().parent.parent / "config" / "config.json"),
         help="Path to JSON config containing LLM endpoint settings.",
     )
     parser.add_argument(

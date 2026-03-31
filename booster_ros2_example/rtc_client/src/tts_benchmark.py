@@ -5,6 +5,7 @@ import statistics
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 
 def _build_request(endpoint, payload, api_key=None, headers=None, auth_header="Authorization", auth_prefix="Bearer "):
@@ -79,7 +80,9 @@ def main():
     parser.add_argument("--stream", action="store_true", help="Enable streaming if supported by server.")
     parser.add_argument(
         "--config",
-        default="booster_robotics_sdk_ros2/booster_ros2_example/rtc_client/config/ai_chat_web.json",
+        default=str(
+            Path(__file__).resolve().parents[3] / "AI_chat_POC" / "config" / "config.json"
+        ),
         help="Path to config JSON with API keys/defaults.",
     )
 

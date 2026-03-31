@@ -1,6 +1,8 @@
 import argparse
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+import sys
 from urllib.parse import parse_qs
 
 import rclpy
@@ -9,8 +11,12 @@ from rclpy.node import Node
 from booster_interface.msg import RemoteControllerState
 from booster_interface.srv import RpcService
 
+POC_SRC = Path(__file__).resolve().parents[3] / "AI_chat_POC" / "src"
+if str(POC_SRC) not in sys.path:
+    sys.path.insert(0, str(POC_SRC))
+
 from llm_web_client import load_config, request_llm
-from llm_web_test import handle_action, parse_response_action, speak
+from main import handle_action, parse_response_action, speak
 
 
 class _Context:
@@ -145,7 +151,9 @@ def main():
     parser.add_argument("--port", type=int, default=9000, help="HTTP port.")
     parser.add_argument(
         "--config",
-        default="~/.config/booster/ai_chat_web.json",
+        default=str(
+            Path(__file__).resolve().parents[3] / "AI_chat_POC" / "config" / "config.json"
+        ),
         help="Path to JSON config containing LLM endpoint settings.",
     )
     parser.add_argument(

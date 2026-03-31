@@ -32,7 +32,11 @@ def _build_tts_request(text, config):
     if not api_key:
         return None, "tts api_key is not configured"
 
-    api_base = (config.get("tts_api_base") or config.get("api_base") or "https://api.openai.com").rstrip("/")
+    api_base = (
+        config.get("tts_api_base")
+        or config.get("openai_api_base")
+        or "https://api.openai.com"
+    ).rstrip("/")
     path = config.get("openai_tts_path", "/v1/audio/speech")
     endpoint = f"{api_base}{path}"
 

@@ -6,12 +6,15 @@ from pathlib import Path
 
 
 def parse_args():
+    default_config = (
+        Path(__file__).resolve().parents[3] / "AI_chat_POC" / "config" / "config.json"
+    )
     parser = argparse.ArgumentParser(
         description="Calibrate walk_step_sec for llm_web_test walk commands."
     )
     parser.add_argument(
         "--config",
-        default="config/ai_chat_web.json",
+        default=str(default_config),
         help="Path to the LLM config JSON to read/write.",
     )
     parser.add_argument(

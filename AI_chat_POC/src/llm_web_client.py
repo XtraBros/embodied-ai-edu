@@ -142,6 +142,50 @@ def _request_ragflow(text, config):
     return content, None
 
 
+def _request_ragflow_with_raw(text, config):
+    api_base = (config.get("api_base") or "").rstrip("/")
+    agent_id = (config.get("agent_id") or "").strip()
+    api_key = (config.get("ragflow_api_key") or config.get("api_key") or "").strip()
+    if not api_base:
+        return "", "api_base is not configured", ""
+    if not agent_id:
+        return "", "agent_id is not configured", ""
+    if not api_key:
+        return "", "api_key is not configured", ""
+
+    path = config.get("agent_completion_path", DEFAULT_CONFIG["agent_completion_path"])
+    endpoint = f"{api_base}{path.replace('{agent_id}', agent_id)}"
+    headers = dict(config.get("headers", {}))
+    auth_header = config.get("auth_header", "Authorization")
+    auth_prefix = config.get("auth_prefix", "Bearer ")
+    headers[auth_header] = f"{auth_prefix}{api_key}"
+
+    body = {
+        "model": config.get("model", "default"),
+        "messages": [{"role": "user", "content": text}],
+        "stream": False,
+    }
+    body_bytes = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(endpoint, data=body_bytes, headers=headers, method="POST")
+    timeout = float(config.get("request_timeout_sec", 120))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return "", f"HTTP error {exc.code}: {exc.reason}", ""
+    except urllib.error.URLError as exc:
+        return "", f"URL error: {exc.reason}", ""
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw.strip(), None, raw
+    content = _parse_ragflow_content(payload)
+    if not content:
+        return "", "RAGFlow response missing content", raw
+    return content, None, raw
+
+
 def _build_openai_request(text, config, stream=False):
     api_key = (config.get("openai_api_key") or config.get("api_key") or "").strip()
     if not api_key:
@@ -195,6 +239,29 @@ def _request_openai(text, config):
     if not content:
         return "", "OpenAI response missing content"
     return content, None
+
+
+def _request_openai_with_raw(text, config):
+    req, err = _build_openai_request(text, config, stream=False)
+    if err:
+        return "", err, ""
+    timeout = float(config.get("request_timeout_sec", 120))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return "", f"HTTP error {exc.code}: {exc.reason}", ""
+    except urllib.error.URLError as exc:
+        return "", f"URL error: {exc.reason}", ""
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw.strip(), None, raw
+    content = _parse_openai_content(payload)
+    if not content:
+        return "", "OpenAI response missing content", raw
+    return content, None, raw
 
 
 def _iter_sse_lines(resp):
@@ -304,6 +371,65 @@ def request_llm(text, config):
     if isinstance(payload, str):
         return payload.strip(), None
     return json.dumps(payload, ensure_ascii=True), None
+
+
+def request_llm_with_raw(text, config):
+    provider = (config.get("provider") or "ragflow").lower()
+    if provider == "ragflow":
+        return _request_ragflow_with_raw(text, config)
+    if provider == "openai":
+        return _request_openai_with_raw(text, config)
+
+    url = config.get("llm_url", "").strip()
+    if not url:
+        return "", "llm_url is not configured", ""
+
+    method = config.get("http_method", "POST").upper()
+    headers = dict(config.get("headers", {}))
+    api_key = config.get("api_key", "").strip()
+    auth_header = config.get("auth_header", "").strip()
+    auth_prefix = config.get("auth_prefix", "")
+    if api_key and auth_header:
+        headers[auth_header] = f"{auth_prefix}{api_key}"
+
+    if method == "GET":
+        params = {config.get("input_field", "query"): text}
+        query = urllib.parse.urlencode(params)
+        url = f"{url}?{query}"
+        body_bytes = None
+    else:
+        body = dict(config.get("extra_body", {}))
+        body[config.get("input_field", "query")] = text
+        body_bytes = json.dumps(body).encode("utf-8")
+
+    req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
+    timeout = float(config.get("request_timeout_sec", 20))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return "", f"HTTP error {exc.code}: {exc.reason}", ""
+    except urllib.error.URLError as exc:
+        return "", f"URL error: {exc.reason}", ""
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw.strip(), None, raw
+
+    path = config.get("response_text_path") or []
+    if path:
+        extracted = _extract_by_path(payload, path)
+        if isinstance(extracted, str):
+            return extracted.strip(), None, raw
+    key = config.get("response_text_key", "")
+    if key and isinstance(payload, dict) and key in payload:
+        value = payload.get(key)
+        if isinstance(value, str):
+            return value.strip(), None, raw
+    if isinstance(payload, str):
+        return payload.strip(), None, raw
+    return json.dumps(payload, ensure_ascii=True), None, raw
 
 
 def find_triggers(text, config):
