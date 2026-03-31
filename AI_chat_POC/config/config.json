@@ -1,10 +1,10 @@
 {
   "openai_api_key": "",
+  "ragflow_api_key": "",
 
   "provider": "openai",
   "api_base": "https://api.openai.com",
   "agent_id": "",
-  "ragflow_api_key": "",
   "model": "gpt-4o-mini",
   "agent_completion_path": "/api/v1/agents_openai/{agent_id}/chat/completions",
   "openai_chat_path": "/v1/chat/completions",
